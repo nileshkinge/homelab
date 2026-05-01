@@ -90,11 +90,11 @@ ansible-playbook -i ansible/inventory.ini ansible/playbooks/deploy.yml --ask-vau
 
 Real `.env` files are not committed. Commit `.env.example` files for documentation, then store real values in Ansible Vault.
 
-For a stack named `portainer_agent` in `config/hosts/debian-trixie-101.yml`:
+For a stack named `actual` in `config/hosts/debian-trixie-101.yml`:
 
 ```yaml
 stacks:
-  portainer_agent:
+  actual:
     path: stacks/actual
 ```
 
@@ -102,7 +102,7 @@ Add matching env values to `ansible/host_vars/debian-trixie-101/vault.yml`:
 
 ```yaml
 homelab_stack_env:
-  portainer_agent:
+  actual:
     ACTUAL_DATA_DIR: /opt/actual/data
 ```
 

@@ -1,8 +1,7 @@
 homelab_repo_url: "https://github.com/nileshkinge/homelab.git"
 homelab_repo_version: master
-homelab_repo_dest: "{{ ansible_user_dir }}/homelab"
-homelab_state_dir: "{{ ansible_user_dir }}/.local/state/homelab"
+homelab_user_home: "{{ '/root' if ansible_user == 'root' else '/home/' + ansible_user }}"
+homelab_repo_dest: "{{ homelab_user_home }}/homelab"
+homelab_state_dir: "{{ homelab_user_home }}/.local/state/homelab"
 
 docker_user: "{{ ansible_user }}"
-
-homelab_stack_env: {}
