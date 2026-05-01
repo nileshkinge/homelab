@@ -1,3 +1,4 @@
 stacks:
   actual:
     path: stacks/actual
+    state: absent

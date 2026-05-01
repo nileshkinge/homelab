@@ -80,6 +80,19 @@ To intentionally deploy nothing on a host, use an empty stack map:
 stacks: {}
 ```
 
+Hosts with no assigned stacks are skipped after their config file is validated.
+
+To remove a stack that was previously deployed, keep the stack entry and mark it absent:
+
+```yaml
+stacks:
+  actual:
+    path: stacks/actual
+    state: absent
+```
+
+The deploy playbook will run `docker compose down --remove-orphans` for absent stacks and remove them from the saved deployment state. After the removal has run successfully, you can either leave the absent entry for documentation or delete the stack entry from the host config.
+
 To test one host only, limit the playbook run:
 
 ```bash

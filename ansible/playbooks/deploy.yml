@@ -10,6 +10,9 @@
     host_stacks_file: "{{ playbook_dir }}/../../config/hosts/{{ inventory_hostname }}.yml"
     host_stacks_config: "{{ lookup('ansible.builtin.file', host_stacks_file) | default('{}', true) | from_yaml | default({}, true) }}"
     assigned_stacks: "{{ host_stacks_config.stacks | default({}) | dict2items }}"
+    absent_stacks: "{{ assigned_stacks | selectattr('value.state', 'defined') | selectattr('value.state', 'equalto', 'absent') | list }}"
+    absent_stack_names: "{{ absent_stacks | map(attribute='key') | list }}"
+    present_stacks: "{{ assigned_stacks | rejectattr('value.state', 'defined') | list + (assigned_stacks | selectattr('value.state', 'defined') | rejectattr('value.state', 'equalto', 'absent') | list) }}"
 
   tasks:
     - name: Ensure host stack config exists
@@ -23,6 +26,10 @@
       ansible.builtin.fail:
         msg: "Missing stack config for {{ inventory_hostname }}: {{ host_stacks_file }}"
       when: not host_stacks_file_state.stat.exists
+
+    - name: Skip host when no stacks are assigned
+      ansible.builtin.meta: end_host
+      when: assigned_stacks | length == 0
 
     - name: Ensure homelab repo is present
       ansible.builtin.git:
@@ -49,6 +56,20 @@
       ansible.builtin.set_fact:
         old_state: "{{ previous_state.content | default('e30=') | b64decode | from_json }}"
 
+    - name: Remove absent stacks
+      ansible.builtin.command: docker compose down --remove-orphans
+      args:
+        chdir: "{{ homelab_repo_dest }}/{{ item.value.path }}"
+      loop: "{{ absent_stacks }}"
+      loop_control:
+        label: "{{ item.key }}"
+      when: absent_stacks | length > 0
+
+    - name: Remove absent stacks from deployment state
+      ansible.builtin.set_fact:
+        deployment_state: "{{ old_state | dict2items | rejectattr('key', 'in', absent_stack_names) | items2dict }}"
+      when: absent_stacks | length > 0
+
     - name: Render stack environment files from Vault
       ansible.builtin.copy:
         dest: "{{ homelab_repo_dest }}/{{ item.value.path }}/.env"
@@ -57,7 +78,7 @@
           {{ env_key }}={{ env_value }}
           {% endfor %}
         mode: "0600"
-      loop: "{{ assigned_stacks }}"
+      loop: "{{ present_stacks }}"
       loop_control:
         label: "{{ item.key }}"
       when: (homelab_stack_env | default({}))[item.key] is defined
@@ -67,7 +88,7 @@
       ansible.builtin.command: docker compose config --quiet
       args:
         chdir: "{{ homelab_repo_dest }}/{{ item.value.path }}"
-      loop: "{{ assigned_stacks }}"
+      loop: "{{ present_stacks }}"
       loop_control:
         label: "{{ item.key }}"
       changed_when: false
@@ -85,7 +106,7 @@
       args:
         chdir: "{{ homelab_repo_dest }}/{{ item.value.path }}"
         executable: /bin/bash
-      loop: "{{ assigned_stacks }}"
+      loop: "{{ present_stacks }}"
       loop_control:
         label: "{{ item.key }}"
       register: stack_hashes
@@ -95,7 +116,7 @@
       ansible.builtin.command: docker compose ps -q
       args:
         chdir: "{{ homelab_repo_dest }}/{{ item.value.path }}"
-      loop: "{{ assigned_stacks }}"
+      loop: "{{ present_stacks }}"
       loop_control:
         label: "{{ item.key }}"
       register: existing_containers
@@ -106,7 +127,7 @@
       ansible.builtin.command: docker compose up -d --remove-orphans
       args:
         chdir: "{{ homelab_repo_dest }}/{{ item.value.path }}"
-      loop: "{{ assigned_stacks }}"
+      loop: "{{ present_stacks }}"
       loop_control:
         label: "{{ item.key }}"
         index_var: stack_index
@@ -120,7 +141,7 @@
       ansible.builtin.command: docker compose ps
       args:
         chdir: "{{ homelab_repo_dest }}/{{ item.value.path }}"
-      loop: "{{ assigned_stacks }}"
+      loop: "{{ present_stacks }}"
       loop_control:
         label: "{{ item.key }}"
       changed_when: false
@@ -128,7 +149,7 @@
     - name: Update deployment state for assigned stacks
       ansible.builtin.set_fact:
         deployment_state: "{{ deployment_state | default(old_state) | combine({ item.key: stack_hashes.results[stack_index].stdout }) }}"
-      loop: "{{ assigned_stacks }}"
+      loop: "{{ present_stacks }}"
       loop_control:
         label: "{{ item.key }}"
         index_var: stack_index
