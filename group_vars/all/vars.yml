@@ -1,0 +1,6 @@
+homelab_repo_url: "https://github.com/YOUR_USER/homelab.git"
+homelab_repo_version: main
+homelab_repo_dest: "{{ ansible_user_dir }}/homelab"
+homelab_state_dir: "{{ ansible_user_dir }}/.local/state/homelab"
+
+docker_user: "{{ ansible_user }}"

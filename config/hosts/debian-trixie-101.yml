@@ -1,0 +1,3 @@
+stacks:
+  portainer_agent:
+    path: stacks/actual

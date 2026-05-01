@@ -1,0 +1,17 @@
+**/.env
+**/data/
+*.log
+*.retry
+.DS_Store
+.vault_pass*
+.vault-password*
+ansible/.vault_pass*
+group_vars/**/secrets.yml
+group_vars/**/secrets.local.yml
+group_vars/**/secrets.plain.yml
+host_vars/**/secrets.yml
+host_vars/**/secrets.local.yml
+host_vars/**/secrets.plain.yml
+ansible/host_vars/**/secrets.yml
+ansible/host_vars/**/secrets.local.yml
+ansible/host_vars/**/secrets.plain.yml

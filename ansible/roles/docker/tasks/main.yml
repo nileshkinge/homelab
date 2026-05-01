@@ -1,0 +1,79 @@
+- name: Set Docker management facts
+  ansible.builtin.set_fact:
+    docker_user: "{{ docker_user | default(ansible_user) }}"
+    can_manage_docker_host: "{{ (ansible_become | default(false) | bool) or ansible_user_id == 'root' }}"
+
+- name: Check if Docker is installed
+  ansible.builtin.command: which docker
+  register: docker_check
+  changed_when: false
+  failed_when: false
+
+- name: Stop when Docker is missing and this connection cannot install it
+  ansible.builtin.fail:
+    msg: >-
+      Docker is not installed on {{ inventory_hostname }}, and this inventory host
+      does not have privilege escalation enabled. Install Docker manually or use a
+      privileged connection for bootstrap.
+  when:
+    - docker_check.rc != 0
+    - not (can_manage_docker_host | bool)
+
+- name: Update apt cache (only if Docker missing)
+  ansible.builtin.apt:
+    update_cache: yes
+  become: "{{ ansible_become | default(false) | bool }}"
+  when:
+    - docker_check.rc != 0
+    - can_manage_docker_host | bool
+
+- name: Install Docker packages (only if missing)
+  ansible.builtin.apt:
+    name:
+      - docker.io
+      - docker-compose-plugin
+    state: present
+  become: "{{ ansible_become | default(false) | bool }}"
+  when:
+    - docker_check.rc != 0
+    - can_manage_docker_host | bool
+
+- name: Ensure Docker service is enabled and running
+  ansible.builtin.systemd:
+    name: docker
+    enabled: yes
+    state: started
+  become: "{{ ansible_become | default(false) | bool }}"
+  when: can_manage_docker_host | bool
+
+- name: Get current user groups safely
+  ansible.builtin.command: id -nG {{ docker_user }}
+  register: user_groups
+  changed_when: false
+  failed_when: false
+  when: can_manage_docker_host | bool
+
+- name: Add user to docker group if not already present
+  ansible.builtin.user:
+    name: "{{ docker_user }}"
+    groups: docker
+    append: yes
+  become: "{{ ansible_become | default(false) | bool }}"
+  when:
+    - can_manage_docker_host | bool
+    - "'docker' not in (user_groups.stdout | default(''))"
+
+- name: Check Docker access for the deployment user
+  ansible.builtin.command: docker ps
+  register: docker_access_check
+  changed_when: false
+  failed_when: false
+  become: false
+
+- name: Report when Docker exists but the deployment user cannot access it yet
+  ansible.builtin.debug:
+    msg: >-
+      {{ docker_user }} cannot access Docker yet on {{ inventory_hostname }}.
+      If the user was just added to the docker group, reconnect or log in again
+      before running deploy.yml.
+  when: docker_access_check.rc != 0

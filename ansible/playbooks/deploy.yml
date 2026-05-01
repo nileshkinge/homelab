@@ -1,0 +1,124 @@
+- name: Deploy homelab Docker Compose stacks
+  hosts: docker_hosts
+  gather_facts: true
+  become: false
+
+  vars_files:
+    - ../../group_vars/all/vars.yml
+
+  vars:
+    host_stacks_file: "{{ playbook_dir }}/../../config/hosts/{{ inventory_hostname }}.yml"
+    host_stacks_config: "{{ lookup('ansible.builtin.file', host_stacks_file) | default('{}', true) | from_yaml | default({}, true) }}"
+    assigned_stacks: "{{ host_stacks_config.stacks | default({}) | dict2items }}"
+
+  tasks:
+    - name: Ensure host stack config exists
+      ansible.builtin.stat:
+        path: "{{ host_stacks_file }}"
+      register: host_stacks_file_state
+      delegate_to: localhost
+      become: false
+
+    - name: Stop when host stack config is missing
+      ansible.builtin.fail:
+        msg: "Missing stack config for {{ inventory_hostname }}: {{ host_stacks_file }}"
+      when: not host_stacks_file_state.stat.exists
+
+    - name: Ensure homelab repo is present
+      ansible.builtin.git:
+        repo: "{{ homelab_repo_url }}"
+        dest: "{{ homelab_repo_dest }}"
+        version: "{{ homelab_repo_version }}"
+        update: yes
+
+    - name: Ensure deployment state directory exists
+      ansible.builtin.file:
+        path: "{{ homelab_state_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Read previous deployment state
+      ansible.builtin.slurp:
+        src: "{{ homelab_state_dir }}/state.json"
+      register: previous_state
+      ignore_errors: true
+
+    - name: Parse previous deployment state
+      ansible.builtin.set_fact:
+        old_state: "{{ previous_state.content | default('e30=') | b64decode | from_json }}"
+
+    - name: Validate assigned compose stacks
+      ansible.builtin.command: docker compose config --quiet
+      args:
+        chdir: "{{ homelab_repo_dest }}/{{ item.value.path }}"
+      loop: "{{ assigned_stacks }}"
+      loop_control:
+        label: "{{ item.key }}"
+      changed_when: false
+
+    - name: Calculate desired stack hashes
+      ansible.builtin.shell: |
+        set -eu
+        files=""
+        for file in docker-compose.yml docker-compose.yaml compose.yml compose.yaml .env; do
+          if [ -f "$file" ]; then
+            files="$files $file"
+          fi
+        done
+        sha256sum $files | sha256sum | awk '{print $1}'
+      args:
+        chdir: "{{ homelab_repo_dest }}/{{ item.value.path }}"
+        executable: /bin/bash
+      loop: "{{ assigned_stacks }}"
+      loop_control:
+        label: "{{ item.key }}"
+      register: stack_hashes
+      changed_when: false
+
+    - name: Detect existing compose containers
+      ansible.builtin.command: docker compose ps -q
+      args:
+        chdir: "{{ homelab_repo_dest }}/{{ item.value.path }}"
+      loop: "{{ assigned_stacks }}"
+      loop_control:
+        label: "{{ item.key }}"
+      register: existing_containers
+      changed_when: false
+      failed_when: false
+
+    - name: Deploy changed or missing stacks
+      ansible.builtin.command: docker compose up -d --remove-orphans
+      args:
+        chdir: "{{ homelab_repo_dest }}/{{ item.value.path }}"
+      loop: "{{ assigned_stacks }}"
+      loop_control:
+        label: "{{ item.key }}"
+        index_var: stack_index
+      register: compose_deploy
+      when:
+        - old_state[item.key] is not defined
+          or old_state[item.key] != stack_hashes.results[stack_index].stdout
+          or (existing_containers.results[stack_index].stdout | trim) == ''
+
+    - name: Check stack status after deployment
+      ansible.builtin.command: docker compose ps
+      args:
+        chdir: "{{ homelab_repo_dest }}/{{ item.value.path }}"
+      loop: "{{ assigned_stacks }}"
+      loop_control:
+        label: "{{ item.key }}"
+      changed_when: false
+
+    - name: Update deployment state for assigned stacks
+      ansible.builtin.set_fact:
+        deployment_state: "{{ deployment_state | default(old_state) | combine({ item.key: stack_hashes.results[stack_index].stdout }) }}"
+      loop: "{{ assigned_stacks }}"
+      loop_control:
+        label: "{{ item.key }}"
+        index_var: stack_index
+
+    - name: Save deployment state
+      ansible.builtin.copy:
+        dest: "{{ homelab_state_dir }}/state.json"
+        content: "{{ deployment_state | default(old_state) | to_nice_json }}"
+        mode: "0644"

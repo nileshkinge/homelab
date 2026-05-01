@@ -1,0 +1,12 @@
+- name: Bootstrap Docker hosts
+  hosts: docker_hosts
+  gather_facts: true
+  become: false
+
+  vars_files:
+    - ../../group_vars/all/vars.yml
+
+  tasks:
+    - name: Apply Docker role
+      ansible.builtin.include_role:
+        name: "{{ playbook_dir }}/../roles/docker"
