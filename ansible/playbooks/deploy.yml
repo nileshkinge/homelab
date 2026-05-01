@@ -47,6 +47,20 @@
       ansible.builtin.set_fact:
         old_state: "{{ previous_state.content | default('e30=') | b64decode | from_json }}"
 
+    - name: Render stack environment files from Vault
+      ansible.builtin.copy:
+        dest: "{{ homelab_repo_dest }}/{{ item.value.path }}/.env"
+        content: |
+          {% for env_key, env_value in homelab_stack_env[item.key].items() %}
+          {{ env_key }}={{ env_value }}
+          {% endfor %}
+        mode: "0600"
+      loop: "{{ assigned_stacks }}"
+      loop_control:
+        label: "{{ item.key }}"
+      when: homelab_stack_env[item.key] is defined
+      no_log: true
+
     - name: Validate assigned compose stacks
       ansible.builtin.command: docker compose config --quiet
       args:

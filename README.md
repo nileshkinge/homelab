@@ -78,6 +78,34 @@ To test one host only, limit the playbook run:
 ansible-playbook -i ansible/inventory.ini ansible/playbooks/deploy.yml --ask-vault-pass --limit debian-trixie-101
 ```
 
+## Stack Environment Files
+
+Real `.env` files are not committed. Commit `.env.example` files for documentation, then store real values in Ansible Vault.
+
+For a stack named `portainer_agent` in `config/hosts/debian-trixie-101.yml`:
+
+```yaml
+stacks:
+  portainer_agent:
+    path: stacks/actual
+```
+
+Add matching env values to `ansible/host_vars/debian-trixie-101/vault.yml`:
+
+```yaml
+homelab_stack_env:
+  portainer_agent:
+    ACTUAL_DATA_DIR: /opt/actual/data
+```
+
+During deploy, Ansible writes this file on the target host:
+
+```text
+~/homelab/stacks/actual/.env
+```
+
+The rendered `.env` file is mode `0600` and the Ansible task hides values from logs.
+
 ## GitOps Settings
 
 Set the real repository URL in `group_vars/all/vars.yml`:
