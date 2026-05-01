@@ -30,6 +30,8 @@
         dest: "{{ homelab_repo_dest }}"
         version: "{{ homelab_repo_version }}"
         update: yes
+      environment:
+        GIT_TERMINAL_PROMPT: "0"
 
     - name: Ensure deployment state directory exists
       ansible.builtin.file:

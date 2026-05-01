@@ -53,6 +53,14 @@ ansible-playbook -i ansible/inventory.ini ansible/playbooks/bootstrap.yml --ask-
 ansible-playbook -i ansible/inventory.ini ansible/playbooks/deploy.yml
 ```
 
+If the deploy appears stuck while checking out the repo, verify GitHub access from the target host:
+
+```bash
+ansible -i ansible/inventory.ini debian-trixie-101 -m command -a "git ls-remote https://github.com/nileshkinge/homelab.git" --ask-vault-pass -e ansible_become=false
+```
+
+For private repos, configure a deploy key or HTTPS token access on the target host before running `deploy.yml`.
+
 ## Stack Placement
 
 Each host has its own stack file under `config/hosts/`. The file name must match the Ansible inventory hostname:
