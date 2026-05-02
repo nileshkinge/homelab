@@ -1,46 +1,32 @@
-# 🏗️ Homelab Architecture
-
-This diagram shows how the control node (WSL) interacts with VM and LXC hosts using Ansible and deploys Docker-based services.
+# 🏗️ Architecture
 
 ---
 
-## 📊 System Architecture
+## 📊 System Overview
 
 ```mermaid
 flowchart TB
 
-    %% Control Node
-    subgraph CONTROL["🧑‍💻 Control Node (WSL Ubuntu)"]
+    subgraph CONTROL["Control Node"]
         A[Ansible CLI]
-        B[Playbooks<br/>bootstrap.yml / deploy.yml]
-        C[Inventory + group_vars]
-        D[stacks.yml]
+        B[Playbooks]
+        C[Inventory]
+        D[Config + Stacks]
     end
 
-    %% VM Host
-    subgraph VM["🖥️ VM: debian-trixie-101"]
-        VM1[Docker Engine]
-        VM2[Docker Compose]
-        VM3[Containers:<br/>Portainer<br/>Immich<br/>Nginx Proxy Manager]
+    subgraph HOSTS["Managed Hosts"]
+        H1[Docker Engine]
+        H2[Docker Compose]
+        H3[Containers]
     end
 
-    %% LXC Host
-    subgraph LXC["📦 LXC: debian-lxc-102"]
-        LXC1[Docker Engine]
-        LXC2[Docker Compose]
-        LXC3[Containers:<br/>Filebrowser<br/>Media Server]
-    end
-
-    %% Connections
     A --> B
     B --> C
     B --> D
 
-    B -- SSH --> VM
-    B -- SSH --> LXC
+    B -- SSH --> HOSTS
 
-    VM1 --> VM2 --> VM3
-    LXC1 --> LXC2 --> LXC3
+    H1 --> H2 --> H3
 ```
 
 ---
@@ -50,87 +36,57 @@ flowchart TB
 ```mermaid
 sequenceDiagram
     participant User
-    participant WSL as Control Node (Ansible)
-    participant VM as VM Host
-    participant LXC as LXC Host
+    participant Ansible
+    participant Host
 
-    User->>WSL: Run ansible-playbook deploy.yml
-    WSL->>WSL: Load inventory + stacks.yml
+    User->>Ansible: Run deploy.yml
+    Ansible->>Ansible: Load config + stacks
 
     loop For each stack
-        WSL->>WSL: Match host == inventory_hostname
-        alt Stack belongs to VM
-            WSL->>VM: docker compose up -d
-        else Stack belongs to LXC
-            WSL->>LXC: docker compose up -d
-        end
+        Ansible->>Host: docker compose up -d
     end
 
-    VM-->>WSL: Status OK
-    LXC-->>WSL: Status OK
+    Host-->>Ansible: Status
 ```
 
 ---
 
 ## 🧠 Key Concepts
 
-### 🔹 Control Node
+### Control Node
 
-* Runs inside WSL (Ubuntu)
-* Executes Ansible playbooks
-* Holds configuration and stack definitions
+Runs Ansible and manages deployments.
 
 ---
 
-### 🔹 Inventory-Based Targeting
+### Hosts
 
-* Hosts grouped as:
-
-  * `docker_vm`
-  * `docker_lxc`
-* Controls sudo vs non-sudo behavior
+Machines where containers run.
 
 ---
 
-### 🔹 Stack Routing (`stacks.yml`)
+### Stack Mapping
 
-* Defines where each service runs
-* Enables multi-host deployment
-
----
-
-### 🔹 Idempotent Execution
-
-* Docker installed only if missing
-* Services deployed safely on repeat runs
+Defined per host via config files.
 
 ---
 
-### 🔹 SSH-Based Execution
+### Idempotency
 
-* No agents required
-* Secure, key-based authentication
+Only changes are applied.
 
 ---
 
-## 🚀 Future Architecture (Planned)
+### Secrets
 
-```mermaid
-flowchart LR
+Handled separately via Vault.
 
-    GitHub[(GitHub Repo)]
-    Actions[GitHub Actions / CI]
-    WSL[Control Node]
+---
 
-    GitHub --> Actions
-    Actions --> WSL
+## 🚀 Future Direction
 
-    WSL --> VM
-    WSL --> LXC
-```
-
-* GitOps workflow
-* Auto-deploy on commit
+* GitOps automation
 * Drift detection
+* Monitoring integration
 
 ---

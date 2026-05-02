@@ -1,242 +1,141 @@
-# 🏠 Homelab Setup Guide (From Scratch)
+# 🏠 Setup Guide
 
-This guide walks through setting up the homelab automation system from zero.
+This guide walks through setting up the homelab automation system from scratch.
 
 ---
 
-# 🎯 Overview
+## 🎯 Overview
 
-This setup uses:
+This system uses:
 
 * Ansible (automation)
 * Docker + Docker Compose (services)
-* WSL Ubuntu (control machine)
-* SSH keys (secure access)
+* SSH (secure remote execution)
 
 ---
 
-# 🖥️ Infrastructure
+## 🧰 Prerequisites
 
-| Host Type | Example           | Notes     |
-| --------- | ----------------- | --------- |
-| VM        | debian-trixie-101 | Uses sudo |
-| LXC       | debian-lxc-102    | No sudo   |
+On your control machine:
 
----
-
-# 🧰 Step 1: Setup WSL (Control Machine)
-
-Install dependencies:
-
+```bash
+sudo apt update && sudo apt install -y ansible git openssh-client
 ```
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y ansible openssh-client git
+
+---
+
+## 🔐 SSH Setup
+
+Generate a key:
+
+```bash
+ssh-keygen -t ed25519
+```
+
+Copy to hosts:
+
+```bash
+ssh-copy-id <user>@<host-ip>
 ```
 
 Verify:
 
-```
-ansible --version
-```
-
----
-
-# 🔐 Step 2: Generate SSH Key
-
-```
-ssh-keygen -t ed25519 -C "homelab"
+```bash
+ssh <user>@<host-ip>
 ```
 
 ---
 
-# 🔑 Step 3: Copy SSH Key to Hosts
-
-### VM
-
-```
-ssh-copy-id uandme77@192.168.0.210
-```
-
-### LXC (manual if needed)
-
-```
-cat ~/.ssh/id_ed25519.pub
-```
-
-Paste into:
-
-```
-~/.ssh/authorized_keys
-```
-
-Set permissions:
-
-```
-chmod 700 ~/.ssh
-chmod 600 ~/.ssh/authorized_keys
-```
-
----
-
-# ✅ Step 4: Verify SSH
-
-```
-ssh uandme77@192.168.0.210
-ssh ansiblessh@192.168.0.201
-```
-
----
-
-# 📁 Step 5: Clone or Create Project
-
-```
-git clone <your-repo>
-cd homelab
-```
-
----
-
-# ⚙️ Step 6: Configure Inventory
-
-`ansible/inventory.ini`
-
-```
-[docker_vm]
-debian-trixie-101 ansible_host=192.168.0.210 ansible_user=uandme77 ansible_become=true
-
-[docker_lxc]
-debian-lxc-102 ansible_host=192.168.0.201 ansible_user=ansiblessh ansible_become=false
-
-[docker_hosts:children]
-docker_vm
-docker_lxc
-```
-
----
-
-# 🐳 Step 7: Bootstrap Hosts
-
-```
-ansible-playbook -i ansible/inventory.ini ansible/playbooks/bootstrap.yml -K
-```
-
----
-
-# 📦 Step 8: Define Services
-
-`config/stacks.yml`
-
-```
-stacks:
-  portainer:
-    host: debian-trixie-101
-    path: stacks/portainer
-
-  filebrowser:
-    host: debian-lxc-102
-    path: stacks/filebrowser
-```
-
----
-
-# ▶️ Step 9: Deploy Services
-
-```
-ansible-playbook -i ansible/inventory.ini ansible/playbooks/deploy.yml -K
-```
-
----
-
-# 🔐 Step 10: Secrets Handling
-
-Create:
-
-```
-group_vars/all/secrets.yml
-```
-
-Example:
-
-```
-ansible_become_password: yourpassword
-```
-
----
-
-## Option A: Ignore file
-
-Add to `.gitignore`
-
----
-
-## Option B: Encrypt
-
-```
-ansible-vault encrypt group_vars/all/secrets.yml
-```
+## ⚙️ Configure Inventory
 
 Edit:
 
 ```
-ansible-vault edit group_vars/all/secrets.yml
+ansible/inventory.ini
+```
+
+Example:
+
+```ini
+[docker_hosts]
+host1 ansible_host=<ip> ansible_user=<user>
+host2 ansible_host=<ip> ansible_user=<user>
 ```
 
 ---
 
-# 🧪 Step 11: Test Connectivity
+## 🐳 Bootstrap Hosts
+
+Install Docker (only if missing):
+
+```bash
+ansible-playbook -i ansible/inventory.ini ansible/playbooks/bootstrap.yml --ask-become-pass
+```
+
+---
+
+## 📦 Define Stack Placement
+
+Create:
 
 ```
+config/hosts/<host>.yml
+```
+
+Example:
+
+```yaml
+stacks:
+  my-app:
+    path: stacks/my-app
+```
+
+---
+
+## ▶️ Deploy Services
+
+```bash
+ansible-playbook -i ansible/inventory.ini ansible/playbooks/deploy.yml --ask-vault-pass
+```
+
+---
+
+## 🔐 Secrets
+
+Store sensitive values in:
+
+```
+ansible/host_vars/<host>/vault.yml
+```
+
+Encrypt:
+
+```bash
+ansible-vault encrypt ansible/host_vars/<host>/vault.yml
+```
+
+---
+
+## 🧪 Test Connectivity
+
+```bash
 ansible all -i ansible/inventory.ini -m ping
 ```
 
 ---
 
-# ⚠️ Troubleshooting
+## ⚠️ Troubleshooting
 
-### sudo not found (LXC)
-
-Set:
-
-```
-ansible_become=false
-```
+| Issue                 | Fix                            |
+| --------------------- | ------------------------------ |
+| SSH asks for password | Fix SSH keys                   |
+| sudo not found        | disable become or install sudo |
+| permission denied     | check user privileges          |
 
 ---
 
-### Permission denied (usermod)
+## ✅ Done
 
-Use:
-
-* root user OR
-* install sudo
-
----
-
-### SSH asking password
-
-Fix SSH key setup
-
----
-
-# 🧠 Design Notes
-
-* VM uses sudo → full OS behavior
-* LXC avoids sudo → lightweight
-* stacks.yml controls service placement
-* Compose used for simplicity
-
----
-
-# 🚀 Next Steps
-
-* Add GitOps (auto deploy)
-* Add container state detection
-* Add monitoring / alerts
-
----
-
-# ✅ Done
-
-You now have a working multi-host homelab automation system 🎉
+You now have a working multi-host Docker deployment system.
 
 ---

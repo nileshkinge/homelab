@@ -1,206 +1,137 @@
-# Homelab Docker Stacks
+# 🏠 Homelab Docker Stacks (GitOps with Ansible)
 
-GitOps-style source of truth for homelab Docker Compose stacks.
+A **general-purpose GitOps framework** for deploying Docker Compose stacks across multiple hosts using Ansible.
 
-## Layout
+---
 
-```text
-ansible/
-  inventory.ini
-  host_vars/
-    debian-trixie-101/
-      vault.yml
-    debian-lxc-102/
-      vault.yml
-  playbooks/
-    bootstrap.yml
-    deploy.yml
-  roles/docker/
-config/
-  hosts/
-    debian-trixie-101.yml
-    debian-lxc-102.yml
-group_vars/all/
-  vars.yml
-stacks/
-  <stack-name>/docker-compose.yaml
+## ✨ Features
+
+* Idempotent Docker setup (install only if missing)
+* Multi-host support (VMs, LXCs, bare metal)
+* Host-specific stack placement
+* Change-aware deployments
+* GitOps-style workflow
+* Secure secret handling via Ansible Vault
+
+---
+
+## 📁 Project Structure
+
+```
+homelab/
+├── ansible/
+│   ├── inventory.ini
+│   ├── host_vars/
+│   │   ├── <host>/
+│   │   │   └── vault.yml
+│   │
+│   ├── playbooks/
+│   │   ├── bootstrap.yml
+│   │   └── deploy.yml
+│   │
+│   └── roles/
+│       └── docker/
+│
+├── config/
+│   └── hosts/
+│       ├── <host>.yml
+│
+├── group_vars/
+│   └── all/
+│       └── vars.yml
+│
+├── stacks/
+│   ├── <stack-name>/
+│   │   └── docker-compose.yml
+│
+├── docs/
+│   ├── setup.md
+│   └── architecture.md
+│
+└── README.md
 ```
 
-## Hosts
+---
 
-- `debian-trixie-101` at `192.168.0.210`, user `uandme77`, uses sudo
-- `debian-lxc-102` at `192.168.0.201`, user `ansiblessh`, no sudo
+## 🧠 How It Works
 
-The inventory only defines hostnames and groups. Connection details live in `ansible/host_vars/<inventory-hostname>/vault.yml`.
+* `inventory.ini` defines your hosts
+* `config/hosts/<host>.yml` defines which stacks run on each host
+* `stacks/` contains Docker Compose definitions
+* Ansible:
 
-## Playbooks
+  * connects via SSH
+  * ensures Docker is installed
+  * deploys only changed stacks
 
-`bootstrap.yml` prepares Docker hosts:
+---
 
-```bash
-ansible-playbook -i ansible/inventory.ini ansible/playbooks/bootstrap.yml
-```
+## 🚀 Usage
 
-If a host uses sudo and prompts for a password, add `--ask-become-pass`:
+### Bootstrap hosts
 
 ```bash
 ansible-playbook -i ansible/inventory.ini ansible/playbooks/bootstrap.yml --ask-vault-pass --ask-become-pass
 ```
 
-`deploy.yml` checks out this repo on each host and deploys the Compose stacks assigned to that host:
+---
+
+### Deploy stacks
 
 ```bash
-ansible-playbook -i ansible/inventory.ini ansible/playbooks/deploy.yml
-```
-
-If the deploy appears stuck while checking out the repo, verify GitHub access from the target host:
-
-```bash
-ansible -i ansible/inventory.ini debian-trixie-101 -m command -a "git ls-remote https://github.com/nileshkinge/homelab.git" --ask-vault-pass -e ansible_become=false
-```
-
-For private repos, configure a deploy key or HTTPS token access on the target host before running `deploy.yml`.
-
-## Stack Placement
-
-Each host has its own stack file under `config/hosts/`. The file name must match the Ansible inventory hostname:
-
-```yaml
-# config/hosts/debian-trixie-101.yml
-stacks:
-  portainer:
-    path: stacks/portainer
-```
-
-The deploy playbook only reads `config/hosts/{{ inventory_hostname }}.yml` for each host. It calculates a hash for each Compose stack, skips unchanged stacks, and deploys when a stack changed or has no existing Compose containers.
-
-To intentionally deploy nothing on a host, use an empty stack map:
-
-```yaml
-stacks: {}
-```
-
-Hosts with no assigned stacks are skipped after their config file is validated.
-
-To remove a stack that was previously deployed, keep the stack entry and mark it absent:
-
-```yaml
-stacks:
-  actual:
-    path: stacks/actual
-    state: absent
-```
-
-The deploy playbook will run `docker compose down --remove-orphans` for absent stacks and remove them from the saved deployment state. After the removal has run successfully, you can either leave the absent entry for documentation or delete the stack entry from the host config.
-
-To test one host only, limit the playbook run:
-
-```bash
-ansible-playbook -i ansible/inventory.ini ansible/playbooks/deploy.yml --ask-vault-pass --limit debian-trixie-101
-```
-
-## Stack Environment Files
-
-Real `.env` files are not committed. Commit `.env.example` files for documentation, then store real values in Ansible Vault.
-
-For a stack named `actual` in `config/hosts/debian-trixie-101.yml`:
-
-```yaml
-stacks:
-  actual:
-    path: stacks/actual
-```
-
-Add matching env values to `ansible/host_vars/debian-trixie-101/vault.yml`:
-
-```yaml
-homelab_stack_env:
-  actual:
-    ACTUAL_DATA_DIR: /opt/actual/data
-```
-
-During deploy, Ansible writes this file on the target host:
-
-```text
-~/homelab/stacks/actual/.env
-```
-
-The rendered `.env` file is mode `0600` and the Ansible task hides values from logs.
-
-## GitOps Settings
-
-Set the real repository URL in `group_vars/all/vars.yml`:
-
-```yaml
-homelab_repo_url: "https://github.com/YOUR_USER/homelab.git"
-homelab_repo_version: main
-```
-
-Each host stores deployment state at `~/.local/state/homelab/state.json`.
-
-## Secrets
-
-Do not commit plaintext `.env` files, SSH keys, API tokens, or vault password files.
-
-Encrypted Ansible Vault files may be committed when the vault password is stored separately.
-
-## Ansible Vault
-
-Ansible automatically loads variables from `host_vars/<inventory-hostname>/` next to the inventory file. For example, when it sees `debian-trixie-101` in `ansible/inventory.ini`, it loads:
-
-```text
-ansible/host_vars/debian-trixie-101/vault.yml
-```
-
-That file can hold connection variables:
-
-```yaml
-ansible_host: 192.168.0.210
-ansible_user: uandme77
-ansible_become: true
-```
-
-If sudo requires a password, either pass it interactively with `--ask-become-pass` or store it encrypted in the host vault file:
-
-```yaml
-ansible_become_password: "your-sudo-password"
-```
-
-Encrypt the host variable files before publishing this repo publicly:
-
-```bash
-ansible-vault encrypt ansible/host_vars/debian-trixie-101/vault.yml
-ansible-vault encrypt ansible/host_vars/debian-lxc-102/vault.yml
-```
-
-Run playbooks with Vault:
-
-```bash
-ansible-playbook -i ansible/inventory.ini ansible/playbooks/bootstrap.yml --ask-vault-pass
 ansible-playbook -i ansible/inventory.ini ansible/playbooks/deploy.yml --ask-vault-pass
 ```
 
-Edit encrypted files with:
+---
+
+### Deploy a single host
 
 ```bash
-ansible-vault edit ansible/host_vars/debian-trixie-101/vault.yml
+ansible-playbook -i ansible/inventory.ini ansible/playbooks/deploy.yml --limit <host> --ask-vault-pass
 ```
 
-Useful Vault commands:
+---
+
+## 🔐 Secrets & Vault
+
+Sensitive data is stored in:
+
+```
+ansible/host_vars/<host>/vault.yml
+```
+
+Used for:
+
+* credentials
+* API keys
+* environment variables
+
+Encrypt:
 
 ```bash
-# View an encrypted file without editing it
-ansible-vault view ansible/host_vars/debian-trixie-101/vault.yml
-
-# Edit an encrypted file and save it encrypted again
-ansible-vault edit ansible/host_vars/debian-trixie-101/vault.yml
-
-# Change the vault password for a file
-ansible-vault rekey ansible/host_vars/debian-trixie-101/vault.yml
-
-# Temporarily decrypt a file
-ansible-vault decrypt ansible/host_vars/debian-trixie-101/vault.yml
-
-# Encrypt a plaintext file
-ansible-vault encrypt ansible/host_vars/debian-trixie-101/vault.yml
+ansible-vault encrypt ansible/host_vars/<host>/vault.yml
 ```
+
+---
+
+## ⚠️ Design Principles
+
+* Infrastructure is defined in config files
+* Secrets are stored separately
+* No environment-specific values in repo
+* Idempotent deployments only
+
+---
+
+## 📚 Documentation
+
+* Setup guide → `docs/setup.md`
+* Architecture → `docs/architecture.md`
+
+---
+
+## 🚀 Goal
+
+A reusable, scalable GitOps framework for managing containerized services across multiple hosts.
+
+---

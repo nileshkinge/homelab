@@ -84,7 +84,7 @@
       when: (homelab_stack_env | default({}))[item.key] is defined
       no_log: true
 
-    - name: Validate assigned compose stacks
+    - name: Validate present compose stacks
       ansible.builtin.command: docker compose config --quiet
       args:
         chdir: "{{ homelab_repo_dest }}/{{ item.value.path }}"
@@ -146,7 +146,7 @@
         label: "{{ item.key }}"
       changed_when: false
 
-    - name: Update deployment state for assigned stacks
+    - name: Update deployment state for present stacks
       ansible.builtin.set_fact:
         deployment_state: "{{ deployment_state | default(old_state) | combine({ item.key: stack_hashes.results[stack_index].stdout }) }}"
       loop: "{{ present_stacks }}"
