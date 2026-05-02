@@ -2,3 +2,6 @@ stacks:
   actual:
     path: stacks/actual
     state: absent
+  vaultwarden:
+    path: stacks/vaultwarden
+    state: present
