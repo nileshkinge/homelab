@@ -2,7 +2,6 @@ services:
   filebrowser:
     image: gtstef/filebrowser:beta
     environment:
-      FILEBROWSER_CONFIG: "data/config.yaml" # overrides the default path which is ./config.yaml
       FILEBROWSER_ADMIN_PASSWORD: "change-me"
       # TZ: "America/New_York"
     volumes:
