@@ -1,1 +1,4 @@
-stacks: {}
+stacks:
+  filebrowser:
+    path: stacks/filebrowser
+    state: present

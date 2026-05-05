@@ -1,0 +1,13 @@
+services:
+  filebrowser:
+    image: gtstef/filebrowser:beta
+    environment:
+      FILEBROWSER_CONFIG: "data/config.yaml" # overrides the default path which is ./config.yaml
+      FILEBROWSER_ADMIN_PASSWORD: "change-me"
+      # TZ: "America/New_York"
+    volumes:
+      - ${FILES_DIR}:/folder # Do not use a root "/" directory or include the "/var" folder
+      - ./data:/home/filebrowser/data
+    ports:
+      - 8324:80
+    restart: unless-stopped
