@@ -1,6 +1,7 @@
 services:
   filebrowser:
     image: gtstef/filebrowser:beta
+    container_name: filebrowser
     environment:
       FILEBROWSER_ADMIN_PASSWORD: "change-me"
       # TZ: "America/New_York"
