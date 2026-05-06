@@ -2,3 +2,6 @@ stacks:
   filebrowser:
     path: stacks/filebrowser
     state: present
+  arrs:
+    path: stacks/arrs
+    state: present
