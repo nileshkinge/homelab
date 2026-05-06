@@ -4,4 +4,4 @@ stacks:
     state: present
   arrs:
     path: stacks/arrs
-    state: absent
+    state: present
