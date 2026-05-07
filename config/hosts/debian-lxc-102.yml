@@ -5,3 +5,6 @@ stacks:
   arrs:
     path: stacks/arrs
     state: present
+  deemix:
+    path: stacks/deemix
+    state: present
